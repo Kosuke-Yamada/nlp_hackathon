@@ -69,81 +69,7 @@ def remove_symbol(word_list):
         new_word_list.append(word)
     return new_word_list
 
-#nグラムを作成する．flag_lastをyesにすることで文末表現のみに出来る．
-def make_ngram(word_list,n,flag_last):
-    new_word_list = []
-    for i in range(len(word_list[:1-n])):
-        new_word = ""
-        for j in range(n):
-            new_word += word_list[i+j-1]
-        flag_pass = 0
-        if flag_last == "yes":
-            if new_word[-1] not in re.findall('[、。]', new_word):
-                flag_pass = 1
-        for j in range(len(new_word)-1):
-            if len(re.findall('[、。]', new_word[j])) == 1 and len(re.findall('[、。]', new_word[j+1])) == 1:
-                flag_pass = 1
-                break
-        if flag_pass == 1:
-            continue
-        new_word_list.append(new_word)
-    return new_word_list
-
-#単語の共起ネットワークを表示する．
-def make_collocation_network(sentence_list, num_word, min_edge):
-    
-    sentence_words_list = []
-    for sentence in sentence_list:
-        word_list = text2word_list(sentence)
-        word_list = remove_symbol(word_list)
-        sentence_words_list.append(word_list)
-
-    word_count_list = Counter(itertools.chain.from_iterable(sentence_words_list)).most_common(num_word)
-    used_word_dict = {w:c for w,c in word_count_list}
-
-    word_edges = []
-    for sentence_words in sentence_words_list:
-        for word0, word1 in itertools.combinations(sentence_words, 2):
-            if word0 not in list(used_word_dict):
-                continue
-            if word1 not in list(used_word_dict):
-                continue
-            if word0 == word1:
-                continue
-            word_edges.append((word0, word1))
-    word_edges_count_dict = Counter(word_edges)
-    
-    g = nx.Graph()
-    vertices_list = []
-    for (node0, node1), count in word_edges_count_dict.items():
-        if count < min_edge:
-            continue
-        g.add_edge(node0, node1, weight=count)
-        vertices_list.append(node0)
-        vertices_list.append(node1)
-    vertices_list = list(set(vertices_list))
-    #g.add_nodes_from([(w, {"count":c}) for w,c in used_word_dict.items() if w in vertices_list]) 
-
-    return g
-
-#共起ネットワークの値を出力
-def show_stats_net(g):
-    print('頂点の数', len(g.nodes))
-    print('辺の数', len(g.edges))
-
-    #次元数
-    deg_list = [(w, i, d) for i,(w,d) in enumerate(sorted(g.degree(), key=lambda x: -x[1]))]
-    #中心性
-    deg_cen_list = [(w, i, round(c,2)) for i,(w,c) in enumerate(sorted(nx.degree_centrality(g).items(), key=lambda x: -x[1]))]                    
-    clo_cen_list = [(w, i, round(c,2)) for i,(w,c) in enumerate(sorted(nx.closeness_centrality(g).items(), key=lambda x: -x[1]))]
-    bet_cen_list = [(w, i, round(c,2)) for i,(w,c) in enumerate(sorted(nx.betweenness_centrality(g).items(), key=lambda x: -x[1]))]
-    eig_cen_list = [(w, i, round(c,2)) for i,(w,c) in enumerate(sorted(nx.eigenvector_centrality_numpy(g).items(), key=lambda x: -x[1]))]
-    pg_list = [(w, i, round(c,2)) for i,(w,c) in enumerate(sorted(nx.pagerank(g).items(), key=lambda x: -x[1]))]
-
-    print('次元中心性','\t\t','近接中心性','\t\t','媒介中心性','\t\t','固有ベクトル中心性','\t','ページランク')
-    for c1, c2, c3, c4, c5 in zip(deg_cen_list, clo_cen_list, bet_cen_list, eig_cen_list, pg_list):
-        print(c1,'\t',c2,'\t',c3,'\t',c4,'\t',c5)
-
+#特徴語抽出
 def extract_feature_words(terms, tfidfs, i, n):
     tfidf_array = tfidfs[i]
     top_n_idx = tfidf_array.argsort()[-n:][::-1]
@@ -157,36 +83,13 @@ if __name__ == '__main__':
         with open("data/abe201"+str(num)+".txt","r") as fread:
             text_list.append(fread.readlines())
             
-    for i, text in enumerate(text_list):
-        text_list[i] = remove_space("".join(text))
-
-    #文の分析
-    #sentence_list = text2sentence_list(text)
-    #len_sentence_array = np.array([len(v) for v in sentence_list])
-    #show_len_str_dist(len_sentence_array)
-    #cnt_dict = Counter(len(x) for x in sentence_list)
-    #print(cnt_dict)
-
-    #共起ネットワークの作成
-    #g = make_collocation_network(sentence_list, 500,3)
-    #a = nx.nx_agraph.to_agraph(g)
-    #a.node_attr['color'] = 'blue'
-    #a.edge_attr['color'] = 'red'
-    #a.layout()
-    #a.draw('a.png')
-
-    #nx.nx_agraph.view_pygraphviz(g, prog='fdp')
-    #show_stats_net(g)
-
     #単語の分析
     for i, text in enumerate(text_list):
-        word_list = text2word_list(text)
-        word_list = remove_symbol(word_list)
-        print(Counter(word_list))
-        text_list[i] = " ".join(word_list)
+        text = remove_space("".join(text))###テキストの変なスペースをなくす
+        word_list = text2word_list(text)###単語のリストに変換
+        word_list = remove_symbol(word_list)###記号除去
+        text_list[i] = " ".join(word_list)###空白で結合
         
-    #word_list = make_ngram(word_list,3,"no")
-    
     vectorizer = TfidfVectorizer(use_idf=True, token_pattern=u'(?u)\\b\\w+\\b')
     features = vectorizer.fit_transform(np.array(text_list))
     terms = vectorizer.get_feature_names()
@@ -199,9 +102,3 @@ if __name__ == '__main__':
     pd.set_option('display.unicode.east_asian_width', True)
     print(pd.DataFrame(zip_list).T)
     
-    #for a,b,c,d,e in zip(zip_list[0], zip_list[1], zip_list[2], zip_list[3], zip_list[4]):
-    #    print("{0},{1},{2},{3},{4}".format(a,b,c,d,e))
-        #print(a,'\t\t',b,'\t\t',c,'\t\t',d,'\t\t',e)
-    
-    #for k,v in sorted(vectorizer.vocabulary_.items(), key=lambda x:x[1]):
-    #    print(k,v)
